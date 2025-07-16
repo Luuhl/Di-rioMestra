@@ -1,18 +1,28 @@
 import HeaderCoord from "./1Componentes/HeaderCoordenacao";
 import SidebarMenu from "./1Componentes/SidebarMenu";
 import { useState } from 'react';
+import { collection,addDoc,getDocs,deleteDoc,updateDoc, doc,} from "firebase/firestore";
+import { db, auth } from "../firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 function GerenciamentoProfessores() {
   const [professores, setProfessores] = useState([]);
   const [novoProfessor, setNovoProfessor] = useState({
     nome: "",
     CPF: "",
+    email: "",
+    materias:"",
     DataDeNascimento: "",
     materia: "",
     foto: null,
   });
-
   const [mostrarPopup, setMostrarPopup] = useState(false);
+  const [modoEdicao, setModoEdicao] = useState(false);
+  const [professorEditandoId, setProfessorEditandoId] = useState(null);
+
+  useEffect(() => {
+    
+  })
 
   const adicionarProfessor = () => {
     const nomeTrimado = novoProfessor.nome.trim();

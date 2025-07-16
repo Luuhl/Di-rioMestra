@@ -1,15 +1,9 @@
 import HeaderCoord from "./1Componentes/HeaderCoordenacao";
 import SidebarMenu from "./1Componentes/SidebarMenu";
 import { useState, useEffect } from "react";
-import {
-  collection,
-  addDoc,
-  getDocs,
-  deleteDoc,
-  updateDoc,
-  doc,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import {collection, addDoc,getDocs,deleteDoc,updateDoc,doc,} from "firebase/firestore";
+import { db, auth } from "../firebase";
+import { createUserWithEmailAndPassword } from "firebase/auth";
 
 function GerenciamentoAlunos() {
   const [alunos, setAlunos] = useState([]);
@@ -42,6 +36,54 @@ function GerenciamentoAlunos() {
     buscarAlunos();
   }, []);
 
+  const criarUsuarioResponsavel = async (cpfResponsavel, responsavelNome) => {
+    try {
+      if (!cpfResponsavel || cpfResponsavel.replace(/\D/g, '').length < 11) {
+        throw new Error("CPF do responsável inválido");
+      }
+
+      const cpfLimpo = cpfResponsavel.replace(/\D/g, '').slice(-11);
+      const emailEscola = `responsavel.${cpfLimpo}@escolamestra.com`;
+      const senha = `${cpfLimpo.slice(-6)}`;
+
+      if (!/^[^@]+@[^@]+\.[^@]+$/.test(emailEscola)) {
+        throw new Error("Email gerado é inválido");
+      }
+
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        emailEscola,
+        senha
+      );
+
+      return userCredential.user.uid;
+    } catch (error) {
+      console.error("Erro ao criar usuário:", error);
+      throw new Error(`Falha ao criar usuário: ${error.message}`);
+    }
+  };
+
+  const criarRegistroUsuario = async (uid, cpfResponsavel, alunoId, responsavelNome) => {
+    try {
+      await addDoc(collection(db, "usuarios"), {
+        uid,
+        cpfResponsavel,
+        tipo: "responsavel",
+        alunoId,
+        nome: responsavelNome,
+        criadoEm: new Date().toISOString(),
+        permissoes: {
+          acessoResponsavel: true,
+          acessoCoordenacao: false,
+          acessoProfessor: false,
+        },
+      });
+    } catch (error) {
+      console.error("Erro ao criar registro de usuário:", error);
+      throw error;
+    }
+  };
+
   const adicionarOuEditarAluno = async () => {
     const nomeTrimado = novoAluno.nome.trim();
     if (!nomeTrimado) return;
@@ -62,6 +104,18 @@ function GerenciamentoAlunos() {
           criadoEm: new Date().toISOString(),
         });
 
+        const userId = await criarUsuarioResponsavel(
+          novoAluno.cpfResponsavel,
+          novoAluno.responsavel
+        );
+
+        await criarRegistroUsuario(
+          userId,
+          novoAluno.cpfResponsavel,
+          docRef.id,
+          novoAluno.responsavel
+        );
+
         setAlunos([...alunos, { id: docRef.id, ...novoAluno }]);
       }
 
@@ -76,8 +130,24 @@ function GerenciamentoAlunos() {
       setMostrarPopup(false);
       setModoEdicao(false);
       setAlunoEditandoId(null);
+
+      alert(
+        `Usuário criado com sucesso!\n\nLogin: ${novoAluno.cpfResponsavel}\nSenha: ${novoAluno.cpfResponsavel.slice(-6)}`
+      );
     } catch (error) {
-      console.error("Erro ao salvar aluno:", error);
+      console.error("Erro ao salvar aluno", error);
+
+      let mensagemErro = "Erro ao cadastrar: ";
+
+      if (error.message.includes("auth/invalid-email")) {
+        mensagemErro += "Email inválido gerado para o responsável.";
+      } else if (error.message.includes("auth/email-already-in-use")) {
+        mensagemErro += "Já existe um usuário com este CPF (email).";
+      } else {
+        mensagemErro += error.message;
+      }
+
+      alert(mensagemErro);
     }
   };
 
@@ -123,18 +193,21 @@ function GerenciamentoAlunos() {
         <main className="content">
           <h2>Gerenciamento de Alunos</h2>
 
-          <button className="botao" onClick={() => {
-            setMostrarPopup(true);
-            setModoEdicao(false);
-            setNovoAluno({
-              nome: "",
-              cpf: "",
-              responsavel: "",
-              cpfResponsavel: "",
-              dataDeNascimento: "",
-              foto: "",
-            });
-          }}>
+          <button
+            className="botao"
+            onClick={() => {
+              setMostrarPopup(true);
+              setModoEdicao(false);
+              setNovoAluno({
+                nome: "",
+                cpf: "",
+                responsavel: "",
+                cpfResponsavel: "",
+                dataDeNascimento: "",
+                foto: "",
+              });
+            }}
+          >
             Cadastrar Aluno
           </button>
 
@@ -148,10 +221,17 @@ function GerenciamentoAlunos() {
                   <p>Aluno: {aluno.nome}</p>
                   <p>CPF: {aluno.cpf}</p>
                   <p>Responsável: {aluno.responsavel}</p>
-                  <p>CPF: {aluno.cpfResponsavel}</p>
+                  <p>CPF Responsável: {aluno.cpfResponsavel}</p>
                   <p>Data de Nascimento: {aluno.dataDeNascimento}</p>
-                  <button className="botaoPopup" onClick={() => editarAluno(aluno)}>Editar</button>
-                  <button className="botaoPopupCancelar" onClick={() => excluirAluno(aluno.id)}>Excluir</button>
+                  <button className="botaoPopup" onClick={() => editarAluno(aluno)}>
+                    Editar
+                  </button>
+                  <button
+                    className="botaoPopupCancelar"
+                    onClick={() => excluirAluno(aluno.id)}
+                  >
+                    Excluir
+                  </button>
                 </div>
               </div>
             ))}
@@ -186,7 +266,7 @@ function GerenciamentoAlunos() {
                 <input
                   type="text"
                   name="cpfResponsavel"
-                  placeholder="CPF do responsável"
+                  placeholder="CPF do responsável (será usado para login)"
                   value={novoAluno.cpfResponsavel}
                   onChange={handleChange}
                 />
@@ -196,18 +276,10 @@ function GerenciamentoAlunos() {
                   value={novoAluno.dataDeNascimento}
                   onChange={handleChange}
                 />
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImagemChange}
-                />
+                <input type="file" accept="image/*" onChange={handleImagemChange} />
 
                 {novoAluno.foto && (
-                  <img
-                    className="cardfoto"
-                    src={novoAluno.foto}
-                    alt="Foto do Aluno"
-                  />
+                  <img className="cardfoto" src={novoAluno.foto} alt="Foto do Aluno" />
                 )}
 
                 <div className="botoesPopup">
