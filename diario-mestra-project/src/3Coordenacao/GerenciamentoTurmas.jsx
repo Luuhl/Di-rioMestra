@@ -1,54 +1,109 @@
 import HeaderCoord from "./1Componentes/HeaderCoordenacao";
 import SidebarMenu from "./1Componentes/SidebarMenu";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { db } from '../firebase';
+import './Coordenacao.css';
 
 function GerenciamentoTurmas() {
   const [turmas, setTurmas] = useState([]);
-  const [mostrarPopup, setMostrarPopup] = useState(false);
-
   const [novaTurma, setNovaTurma] = useState({
-    serie: "",
-    periodo: "",
+    serie: '',
+    periodo: '',
     materias: [],
   });
+  const [materiasDisponiveis, setMateriasDisponiveis] = useState([]);
+  const [mostrarPopup, setMostrarPopup] = useState(false);
+  const [editandoId, setEditandoId] = useState(null);
 
-  const materiasDisponiveis = [
-    "Português",
-    "Matemática",
-    "História",
-    "Ciências",
-    "Geografia",
-  ];
+  useEffect(() => {
+    const buscarTurmas = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'turmas'));
+      const turmasData = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTurmas(turmasData);
+    } catch (error) {
+      console.error("Erro ao buscar turmas:", error);
+    }
+  };
 
+  const buscarMaterias = async () => {
+    try {
+      const querySnapshot = await getDocs(collection(db, 'materias'));
+      const listaMaterias = querySnapshot.docs.map(doc => doc.data().nome);
+      setMateriasDisponiveis(listaMaterias);
+    } catch (error) {
+      console.error("Erro ao buscar matérias disponíveis:", error);
+    }
+  };
+
+  buscarTurmas();
+  buscarMaterias();
+}, []);
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setNovaTurma({ ...novaTurma, [name]: value });
+    setNovaTurma(prev => ({ ...prev, [name]: value }));
   };
 
   const handleMateriaChange = (e) => {
     const { value, checked } = e.target;
-    if (checked) {
-      setNovaTurma((prev) => ({
-        ...prev,
-        materias: [...prev.materias, value],
-      }));
-    } else {
-      setNovaTurma((prev) => ({
-        ...prev,
-        materias: prev.materias.filter((m) => m !== value),
-      }));
+    setNovaTurma(prev => ({
+      ...prev,
+      materias: checked
+        ? [...prev.materias, value]
+        : prev.materias.filter(m => m !== value)
+    }));
+  };
+
+  const adicionarTurma = async () => {
+    if (!novaTurma.serie.trim()) return;
+
+    try {
+      if (editandoId) {
+        await updateDoc(doc(db, 'turmas', editandoId), novaTurma);
+        setTurmas(turmas.map(t =>
+          t.id === editandoId ? { ...t, ...novaTurma } : t
+        ));
+      } else {
+        const docRef = await addDoc(collection(db, 'turmas'), novaTurma);
+        setTurmas([...turmas, { id: docRef.id, ...novaTurma }]);
+      }
+
+      setNovaTurma({
+        serie: '',
+        periodo: '',
+        materias: [],
+      });
+      setEditandoId(null);
+      setMostrarPopup(false);
+    } catch (error) {
+      console.error("Erro ao salvar turma:", error);
+      alert("Erro ao salvar turma. Tente novamente.");
     }
   };
 
-  const cadastrarTurma = () => {
-    const { serie, periodo, materias } = novaTurma;
-    if (serie && periodo && materias.length > 0) {
-      const nomeTurma = `${serie} - ${periodo} - ${materias.join(", ")}`;
-      if (!turmas.includes(nomeTurma)) {
-        setTurmas([...turmas, nomeTurma]);
-        setMostrarPopup(false);
-        setNovaTurma({ serie: "", periodo: "", materias: [] });
-      }
+  const editarTurma = (turma) => {
+    setNovaTurma({
+      serie: turma.serie,
+      periodo: turma.periodo,
+      materias: turma.materias || [],
+    });
+    setEditandoId(turma.id);
+    setMostrarPopup(true);
+  };
+
+  const excluirTurma = async (id) => {
+    if (!window.confirm("Tem certeza que deseja excluir esta turma?")) return;
+
+    try {
+      await deleteDoc(doc(db, 'turmas', id));
+      setTurmas(turmas.filter(t => t.id !== id));
+    } catch (error) {
+      console.error("Erro ao excluir turma:", error);
+      alert("Erro ao excluir turma. Tente novamente.");
     }
   };
 
@@ -63,14 +118,21 @@ function GerenciamentoTurmas() {
         <main className="content">
           <h2>Gerenciamento de Turmas</h2>
 
-          <button className="botao" onClick={() => setMostrarPopup(true)}>
-            Cadastrar Turma
+          <button className="botao" onClick={() => {
+            setMostrarPopup(true);
+            setNovaTurma({ serie: '', periodo: '', materias: [] });
+            setEditandoId(null);
+          }}>
+            {editandoId ? "Editar Turma" : "Cadastrar Turma"}
           </button>
 
-          <div className="cardsContainer">
-            {turmas.map((turma, index) => (
-              <div className="cardTurma" key={index}>
-                {turma}
+          <div className="materias-grid">
+            {turmas.map((turma) => (
+              <div className="materia-card" key={turma.id}>
+                <h3>{turma.serie} - {turma.periodo}</h3>
+                <p><strong>Matérias:</strong> {turma.materias?.join(', ')}</p>
+                <button className="botao" onClick={() => editarTurma(turma)}>Editar</button>
+                <button className="botao-cancelar" onClick={() => excluirTurma(turma.id)}>Excluir</button>
               </div>
             ))}
           </div>
@@ -79,7 +141,7 @@ function GerenciamentoTurmas() {
         {mostrarPopup && (
           <div className="popupOverlay">
             <div className="popup">
-              <h3>Nova Turma</h3>
+              <h3>{editandoId ? 'Editar Turma' : 'Nova Turma'}</h3>
 
               <div className="formGrid">
                 <div className="filtro">
@@ -88,7 +150,7 @@ function GerenciamentoTurmas() {
                     type="text"
                     name="serie"
                     value={novaTurma.serie}
-                    placeholder="Escreva qual turma deseja cadastrar"
+                    placeholder="Ex: 1º Ano A"
                     onChange={handleChange}
                   />
                 </div>
@@ -97,7 +159,6 @@ function GerenciamentoTurmas() {
                   <label htmlFor="periodo">Período</label>
                   <select
                     name="periodo"
-                    id="periodo"
                     value={novaTurma.periodo}
                     onChange={handleChange}
                   >
@@ -127,14 +188,11 @@ function GerenciamentoTurmas() {
               </div>
 
               <div className="botoesPopup">
-                <button
-                  className="botaoPopupCancelar"
-                  onClick={() => setMostrarPopup(false)}
-                >
+                <button className="botaoPopupCancelar" onClick={() => setMostrarPopup(false)}>
                   Cancelar
                 </button>
-                <button className="botaoPopup" onClick={cadastrarTurma}>
-                  Cadastrar
+                <button className="botaoPopup" onClick={adicionarTurma}>
+                  {editandoId ? 'Atualizar' : 'Cadastrar'}
                 </button>
               </div>
             </div>

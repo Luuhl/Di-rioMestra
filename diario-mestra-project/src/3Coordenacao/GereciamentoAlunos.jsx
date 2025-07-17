@@ -1,12 +1,13 @@
 import HeaderCoord from "./1Componentes/HeaderCoordenacao";
 import SidebarMenu from "./1Componentes/SidebarMenu";
 import { useState, useEffect } from "react";
-import {collection, addDoc,getDocs,deleteDoc,updateDoc,doc,} from "firebase/firestore";
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 
 function GerenciamentoAlunos() {
   const [alunos, setAlunos] = useState([]);
+  const [turmasDisponiveis, setTurmasDisponiveis] = useState([]); // CORREÇÃO AQUI
   const [novoAluno, setNovoAluno] = useState({
     nome: "",
     cpf: "",
@@ -14,26 +15,27 @@ function GerenciamentoAlunos() {
     cpfResponsavel: "",
     dataDeNascimento: "",
     foto: "",
+    turmaId: "", // ID da turma selecionada
   });
   const [mostrarPopup, setMostrarPopup] = useState(false);
   const [modoEdicao, setModoEdicao] = useState(false);
   const [alunoEditandoId, setAlunoEditandoId] = useState(null);
 
   useEffect(() => {
-    const buscarAlunos = async () => {
+    const buscarTurmas = async () => {
       try {
-        const snapshot = await getDocs(collection(db, "alunos"));
-        const listaAlunos = snapshot.docs.map((doc) => ({
+        const querySnapshot = await getDocs(collection(db, 'turmas'));
+        const turmas = querySnapshot.docs.map(doc => ({
           id: doc.id,
-          ...doc.data(),
+          ...doc.data()
         }));
-        setAlunos(listaAlunos);
+        setTurmasDisponiveis(turmas);
       } catch (error) {
-        console.error("Erro ao buscar alunos:", error);
+        console.error("Erro ao buscar turmas:", error);
       }
     };
 
-    buscarAlunos();
+    buscarTurmas();
   }, []);
 
   const criarUsuarioResponsavel = async (cpfResponsavel, responsavelNome) => {
@@ -50,12 +52,7 @@ function GerenciamentoAlunos() {
         throw new Error("Email gerado é inválido");
       }
 
-      const userCredential = await createUserWithEmailAndPassword(
-        auth,
-        emailEscola,
-        senha
-      );
-
+      const userCredential = await createUserWithEmailAndPassword(auth, emailEscola, senha);
       return userCredential.user.uid;
     } catch (error) {
       console.error("Erro ao criar usuário:", error);
@@ -90,31 +87,17 @@ function GerenciamentoAlunos() {
 
     try {
       if (modoEdicao && alunoEditandoId) {
-        const ref = doc(db, "alunos", alunoEditandoId);
-        await updateDoc(ref, novoAluno);
-
-        setAlunos((prev) =>
-          prev.map((a) =>
-            a.id === alunoEditandoId ? { ...a, ...novoAluno } : a
-          )
-        );
+        await updateDoc(doc(db, "alunos", alunoEditandoId), novoAluno);
+        setAlunos(prev => prev.map(a => a.id === alunoEditandoId ? { ...a, ...novoAluno } : a));
       } else {
         const docRef = await addDoc(collection(db, "alunos"), {
           ...novoAluno,
           criadoEm: new Date().toISOString(),
         });
 
-        const userId = await criarUsuarioResponsavel(
-          novoAluno.cpfResponsavel,
-          novoAluno.responsavel
-        );
+        const userId = await criarUsuarioResponsavel(novoAluno.cpfResponsavel, novoAluno.responsavel);
 
-        await criarRegistroUsuario(
-          userId,
-          novoAluno.cpfResponsavel,
-          docRef.id,
-          novoAluno.responsavel
-        );
+        await criarRegistroUsuario(userId, novoAluno.cpfResponsavel, docRef.id, novoAluno.responsavel);
 
         setAlunos([...alunos, { id: docRef.id, ...novoAluno }]);
       }
@@ -126,6 +109,7 @@ function GerenciamentoAlunos() {
         cpfResponsavel: "",
         dataDeNascimento: "",
         foto: "",
+        turmaId: "",
       });
       setMostrarPopup(false);
       setModoEdicao(false);
@@ -138,7 +122,6 @@ function GerenciamentoAlunos() {
       console.error("Erro ao salvar aluno", error);
 
       let mensagemErro = "Erro ao cadastrar: ";
-
       if (error.message.includes("auth/invalid-email")) {
         mensagemErro += "Email inválido gerado para o responsável.";
       } else if (error.message.includes("auth/email-already-in-use")) {
@@ -154,7 +137,7 @@ function GerenciamentoAlunos() {
   const excluirAluno = async (id) => {
     try {
       await deleteDoc(doc(db, "alunos", id));
-      setAlunos((prev) => prev.filter((a) => a.id !== id));
+      setAlunos(prev => prev.filter(a => a.id !== id));
     } catch (error) {
       console.error("Erro ao excluir aluno:", error);
     }
@@ -177,7 +160,7 @@ function GerenciamentoAlunos() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setNovoAluno((prev) => ({
+    setNovoAluno(prev => ({
       ...prev,
       [name]: value,
     }));
@@ -205,6 +188,7 @@ function GerenciamentoAlunos() {
                 cpfResponsavel: "",
                 dataDeNascimento: "",
                 foto: "",
+                turmaId: "",
               });
             }}
           >
@@ -215,21 +199,17 @@ function GerenciamentoAlunos() {
             {alunos.map((aluno) => (
               <div key={aluno.id} className="cardAluno">
                 <div className="conteudoCardBranco">
-                  {aluno.foto && (
-                    <img className="cardfoto" src={aluno.foto} alt="Foto" />
-                  )}
+                  {aluno.foto && <img className="cardfoto" src={aluno.foto} alt="Foto" />}
                   <p>Aluno: {aluno.nome}</p>
                   <p>CPF: {aluno.cpf}</p>
                   <p>Responsável: {aluno.responsavel}</p>
                   <p>CPF Responsável: {aluno.cpfResponsavel}</p>
                   <p>Data de Nascimento: {aluno.dataDeNascimento}</p>
+                  <p>Turma: {aluno.turmaId}</p>
                   <button className="botaoPopup" onClick={() => editarAluno(aluno)}>
                     Editar
                   </button>
-                  <button
-                    className="botaoPopupCancelar"
-                    onClick={() => excluirAluno(aluno.id)}
-                  >
+                  <button className="botaoPopupCancelar" onClick={() => excluirAluno(aluno.id)}>
                     Excluir
                   </button>
                 </div>
@@ -276,6 +256,20 @@ function GerenciamentoAlunos() {
                   value={novoAluno.dataDeNascimento}
                   onChange={handleChange}
                 />
+
+                <select
+                  name="turmaId"
+                  value={novoAluno.turmaId}
+                  onChange={handleChange}
+                >
+                  <option value="">Selecione a turma</option>
+                  {turmasDisponiveis.map((turma) => (
+                    <option key={turma.id} value={turma.id}>
+                      {turma.serie} - {turma.periodo}
+                    </option>
+                  ))}
+                </select>
+
                 <input type="file" accept="image/*" onChange={handleImagemChange} />
 
                 {novoAluno.foto && (

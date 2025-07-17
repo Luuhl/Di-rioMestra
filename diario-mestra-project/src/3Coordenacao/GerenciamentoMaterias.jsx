@@ -33,10 +33,7 @@ function GerenciamentoMaterias() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setNovaMateria(prev => ({
-      ...prev, 
-      [name]: value
-    }));
+    setNovaMateria(prev => ({...prev, [name]: value}));
   };
 
   const adicionarMateria = async () => {

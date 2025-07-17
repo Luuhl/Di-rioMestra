@@ -10,7 +10,6 @@ import GerenciamentoMaterias from './3Coordenacao/GerenciamentoMaterias';
 import GerenciamentoTurmas from './3Coordenacao/GerenciamentoTurmas';
 import GerenciamentoProfessores from './3Coordenacao/GerenciamentoProfessores';
 import GerenciamentoAlunos from './3Coordenacao/GereciamentoAlunos';
-
 import Relatorio from './3Coordenacao/Relatorio';
 import Mensagem from './3Coordenacao/Mensagem';
 
