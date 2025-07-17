@@ -1,7 +1,7 @@
 import HeaderCoord from "./1Componentes/HeaderCoordenacao";
 import SidebarMenu from "./1Componentes/SidebarMenu";
 import { useState, useEffect } from 'react';
-import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc } from "firebase/firestore";
+import { collection, addDoc, getDocs, deleteDoc, updateDoc, doc, arrayUnion } from "firebase/firestore";
 import { db, auth } from "../firebase";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 
@@ -15,7 +15,10 @@ function GerenciamentoProfessores() {
     dataDeNascimento: "",
     foto: ""
   });
+  const [materias, setMaterias] = useState(['']);
+  const [materiasSelecionadas, setMaterasSelecionas] = useState(['']);
   const [mostrarPopup, setMostrarPopup] = useState(false);
+  
   const [modoEdicao, setModoEdicao] = useState(false);
   const [professorEditandoId, setProfessorEditandoId] = useState(null);
 
